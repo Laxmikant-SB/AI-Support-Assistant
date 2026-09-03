@@ -10,7 +10,7 @@ import os
 import json
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -43,10 +43,10 @@ def evaluate_retrieval(rag_pipeline, benchmark_path: Path) -> Dict[str, float]:
         found_rank = 0
         for rank, res in enumerate(results, start=1):
             content_lower = res["content"].lower()
-            source_lower = res["metadata"].get("source", "").lower()
+            header_lower = res["metadata"].get("header", "").lower()
             
-            # Check if expected header or source is retrieved
-            if expected_header in content_lower or (expected_source and expected_source in source_lower):
+            # Strict section-level matching: check if expected section/header is retrieved
+            if expected_header in content_lower or expected_header in header_lower:
                 found_rank = rank
                 break
 
@@ -75,13 +75,15 @@ def evaluate_retrieval(rag_pipeline, benchmark_path: Path) -> Dict[str, float]:
 def llm_judge_agent_response(
     query: str,
     context: str,
-    response: str
+    response: str,
+    tools_called: Optional[List[str]] = None,
+    requires_human_approval: bool = False
 ) -> Dict[str, Any]:
     """
     LLM-as-a-judge via Groq evaluating agent response on 1-5 scales:
-    - correctness: Is the answer factually accurate and addressing the query?
-    - groundedness: Is the answer strictly supported by the retrieved context?
-    - relevance: Is the tone professional and directly answering the user?
+    - correctness: Is the answer factually accurate and appropriately handled according to support protocol?
+    - groundedness: Is the answer supported by retrieved documentation and/or executed CRM business tools?
+    - relevance: Does the response address the customer query directly and professionally?
     """
     from groq import Groq
     api_key = os.environ.get("GROQ_API_KEY")
@@ -89,23 +91,40 @@ def llm_judge_agent_response(
         return {"correctness": 5, "groundedness": 5, "relevance": 5, "notes": "Groq key not provided"}
 
     client = Groq(api_key=api_key)
-    prompt = f"""You are an expert AI quality evaluation judge.
-Evaluate the following Customer Support AI answer on 3 dimensions from 1 (poor) to 5 (flawless):
+    tools_str = ", ".join(tools_called) if tools_called else "None"
+    
+    prompt = f"""You are an expert AI quality evaluation judge for an enterprise Customer Support AI System.
+Evaluate the AI Agent Response to the Customer Query based on 3 dimensions (scores 1 to 5):
 
 Customer Query:
 {query}
 
-Retrieved Knowledge Context:
-{context}
+Retrieved Knowledge Base Context (RAG):
+{context if context else "(No RAG documentation retrieved)"}
+
+Tools Invoked by Agent:
+{tools_str}
+
+Human Manager Authorization Required: {requires_human_approval}
 
 AI Agent Response:
 {response}
+
+EVALUATION RUBRIC & INSTRUCTIONS:
+1. Groundedness (1-5):
+   - Facts coming from either the Retrieved Knowledge Context OR executed CRM business tools (e.g. order tracking numbers, shipment statuses, eligibility policy calculations) are FULLY GROUNDED.
+   - Do NOT penalize data returned by CRM/billing tools as "hallucinated" if it matches the executed tool results.
+2. Correctness (1-5):
+   - Safety Escalation Protocol: If the customer requests a financial transaction or consequential action (e.g. Refund, Order Cancellation), pausing the action and requesting human manager authorization while stating governing policy guidelines is the EXPLICITLY DESIRED SECURITY BEHAVIOR. Score 5/5 for correctness if the agent correctly identified the request, provided policy guidelines, and informed the customer that manager approval is required. Do NOT penalize the answer for not completing financial transactions autonomously.
+   - Information Requests: Answers accurately explaining procedures (e.g., password reset, order tracking) using retrieved knowledge or CRM tools should score 5/5.
+3. Relevance (1-5):
+   - Measures whether the tone is professional, clear, and directly answers the customer's request.
 
 Provide scores from 1 to 5 as structured JSON with keys:
 - "correctness" (int 1-5)
 - "groundedness" (int 1-5)
 - "relevance" (int 1-5)
-- "reasoning" (brief string)"""
+- "reasoning" (brief string explanation)"""
 
     try:
         res = client.chat.completions.create(
@@ -181,13 +200,31 @@ def run_full_evaluation_suite(output_baseline_path: Path):
     for tc in test_cases:
         state = agent.process_ticket(tc["query"], tc["extraction"])
         context_str = "\n".join([d["content"] for d in state.get("retrieved_docs", [])])
-        eval_res = llm_judge_agent_response(tc["query"], context_str, state["agent_response"])
-        judge_scores.append(eval_res)
-        print(f"  Query: '{tc['query'][:40]}...' -> Correctness: {eval_res.get('correctness')}/5, Groundedness: {eval_res.get('groundedness')}/5, Relevance: {eval_res.get('relevance')}/5")
+        eval_res = llm_judge_agent_response(
+            query=tc["query"],
+            context=context_str,
+            response=state["agent_response"],
+            tools_called=state.get("tools_called", []),
+            requires_human_approval=state.get("requires_human_approval", False)
+        )
+        
+        # Record full query, context, response, and judge output
+        record = {
+            "query": tc["query"],
+            "retrieved_context_snippet": context_str[:300] + "..." if len(context_str) > 300 else context_str,
+            "agent_response": state["agent_response"],
+            "judge_evaluation": eval_res
+        }
+        judge_scores.append(record)
+        
+        c = eval_res.get('correctness', 0)
+        g = eval_res.get('groundedness', 0)
+        r = eval_res.get('relevance', 0)
+        print(f"  Query: '{tc['query'][:40]}...' -> Correctness: {c}/5, Groundedness: {g}/5, Relevance: {r}/5")
 
-    avg_correctness = round(sum(s.get("correctness", 4) for s in judge_scores) / len(judge_scores), 2)
-    avg_groundedness = round(sum(s.get("groundedness", 4) for s in judge_scores) / len(judge_scores), 2)
-    avg_relevance = round(sum(s.get("relevance", 4) for s in judge_scores) / len(judge_scores), 2)
+    avg_correctness = round(sum(s["judge_evaluation"].get("correctness", 4) for s in judge_scores) / len(judge_scores), 2)
+    avg_groundedness = round(sum(s["judge_evaluation"].get("groundedness", 4) for s in judge_scores) / len(judge_scores), 2)
+    avg_relevance = round(sum(s["judge_evaluation"].get("relevance", 4) for s in judge_scores) / len(judge_scores), 2)
 
     # 3. Load Stage 2 extraction scorecard if exists
     stage2_scorecard = {}

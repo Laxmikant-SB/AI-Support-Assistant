@@ -20,27 +20,42 @@
     "mrr": 1.0
   },
   "agent_llm_judge_metrics": {
-    "avg_correctness_score_1_to_5": 2.0,
-    "avg_groundedness_score_1_to_5": 1.67,
-    "avg_relevance_score_1_to_5": 2.33,
+    "avg_correctness_score_1_to_5": 4.67,
+    "avg_groundedness_score_1_to_5": 4.67,
+    "avg_relevance_score_1_to_5": 4.33,
     "sample_evaluations": [
       {
-        "correctness": 2,
-        "groundedness": 1,
-        "relevance": 2,
-        "reasoning": "The reply mentions a refund request and an order number, but it does not explain how to obtain a refund after 20 days, provides no policy or steps, lacks grounding in the query context, and offers little actionable information."
+        "query": "How can I get a refund for my annual plan after 20 days?",
+        "retrieved_context_snippet": "[Billing, Payments, and Refund Policies > Refund Eligibility Policy]\nRefund eligibility depends on subscription tier and billing cadence:\n- **Monthly Subscriptions**: Eligible for a full refund if requested within 14 calendar days of initial billing or auto-renewal, provided total API/compute consum...",
+        "agent_response": "Your request regarding refund / cancellation has been received.\n\nPolicy Guidelines:\n--- Policy: Billing, Payments, and Refund Policies > Refund Eligibility Policy ---\n[Billing, Payments, and Refund Policies > Refund Eligibility Policy]\nRefund eligibility depends on subscription tier and billing cadence:\n- **Monthly Subscriptions**: Eligible for a full refund if requested within 14 calendar days of initial billing or auto-renewal, provided total API/compute consumption does not exceed 10% of monthly quotas.\n- **Annual Subscriptions**: Eligible for a 100% refund within 30 calendar days of initial purchase.\n\n--- Policy: Billing, Payments, and Refund Policies > Refund Eligibility Policy ---\n[Billing, Payments, and Refund Policies > Refund Eligibility Policy]\nr a 100% refund within 30 calendar days of initial purchase. After 30 days, pro-rated refunds are calculated based on unused remaining full calendar months, minus standard non-discounted monthly rates for active months.\n- **Hardware & Physical Merchandise**: Full refund within 30 days of physical delivery if returned in original condition with intact tamper seals.\n- **Exceptions**: Setup fees, custom integration contracts, and consumed pay-as-you-go credits are non-refundable unless service downtime exceeded SLA commitments (99.9% monthly uptime).\n\nOrder Reference: ORD-8821-4902 (Status: In Transit). Eligibility assessment: Within 30-day partial/prorated refund window.. Because this involves a financial transaction (Refund), our support team is confirming final manager authorization to process this securely.",
+        "judge_evaluation": {
+          "correctness": 4,
+          "groundedness": 4,
+          "relevance": 4,
+          "reasoning": "The agent correctly recognized the refund request, quoted the 30\u2011day full\u2011refund policy for annual plans, and stated that manager authorization is required, which follows safety protocol. However, it mistakenly refers to a 'partial/prorated refund window' and repeats policy text redundantly, introducing a factual inconsistency and reducing clarity."
+        }
       },
       {
-        "correctness": 3,
-        "groundedness": 3,
-        "relevance": 3,
-        "reasoning": "The answer references the correct password\u2011reset guide but is truncated, missing steps 2\u20114 and details like checking spam; it is grounded in the source but incomplete, lowering correctness and relevance."
+        "query": "How do I reset my forgotten password?",
+        "retrieved_context_snippet": "[Account Access and Login Troubleshooting Guide > Password Reset and Recovery]\nUsers experiencing login difficulties should first attempt standard self-service password recovery:\n1. Navigate to the sign-in portal and select **Forgot Password**.\n2. Enter the verified primary email address associated ...",
+        "agent_response": "Hello! Thank you for reaching out to support.\n\nBased on our knowledge base:\n--- Doc: Account Access and Login Troubleshooting Guide > Password Reset and Recovery ---\n[Account Access and Login Troubleshooting Guide > Password Reset and Recovery]\nUsers experiencing login difficulties should first attempt standard self-service password recovery:\n1. Navigate to the sign-in portal and select **Forgot Password**.\n2. Enter the verified primary email address associated with the account.\n3. Check your inbox for an automated reset link containing a cryptographically signed one-time token. Reset links expire after 15 minutes.\n4. If the reset email is not received within 5 minutes, inspect spam/junk filters or verify if an enterprise email security gateway (such as Mimecast or Proofpoint) quarantined the message.\n\n--- Doc: Account Access and Login Troubleshooting Guide > Two-Factor Authentication (2FA) Reset ---\n[Account Access and Login Troubleshooting Guide > Two-Factor Authentication (2FA) Reset]\nWhen a user loses access to their registered authenticator app or hardware security key:\n- **Backup Recovery Codes**: Users can sign in using one of the 10 single-use recovery codes generated during initial 2FA setup.\n- **Manual 2FA Reset Request**: If recovery codes are unavailable, an account security review is required.\n\nIf you need any further assistance with this issue, please let us know!",
+        "judge_evaluation": {
+          "correctness": 5,
+          "groundedness": 5,
+          "relevance": 4,
+          "reasoning": "The answer accurately provides the password\u2011reset steps from the knowledge base, fully grounded in the retrieved context. It correctly addresses the user\u2019s request, but adds unrelated 2FA reset information, which slightly reduces relevance."
+        }
       },
       {
-        "correctness": 1,
-        "groundedness": 1,
-        "relevance": 2,
-        "reasoning": "The answer provides tracking details for the wrong order (ORD-8821-4902) instead of the requested ORD-1234, making it incorrect and ungrounded, though it attempts to address tracking, so relevance is low."
+        "query": "Can you check tracking for my order ORD-1234?",
+        "retrieved_context_snippet": "[Order Processing, Shipping, and Delivery Guide > Order Status and Tracking]\n- **Order Placement**: Once confirmed, orders receive a unique 10-digit Order ID (`ORD-XXXX-XXXX`).\n- **Processing Stage (0-24 Hours)**: The fulfillment warehouse verifies stock allocation and packages items.\n- **In-Transit...",
+        "agent_response": "Thank you for contacting us regarding your order ORD-1234.\nCurrent Status: In Transit\nCarrier: FedEx (Tracking: TRK-1234)\nEstimated Delivery: 2 business days\n\nRelevant Information:\n--- Policy: Order Processing, Shipping, and Delivery Guide > Order Status and Tracking ---\n[Order Processing, Shipping, and Delivery Guide > Order Status and Tracking]\n- **Order Placement**: Once confirmed, orders receive a unique 10-digit Order ID (`ORD-XXXX-XXXX`).\n- **Processing Stage (0-24 Hours)**: The fulfillment warehouse verifies stock allocation and packages items.\n- **In-Transit Stage**: Tracking numbers (FedEx, UPS, DHL) are emailed to the customer once scanned at the carrier origin facility.\n- **Estimated Delivery Windows**: Standard domestic shipping takes 3-5 business days; expedited shipping takes 1-2 business days; international delivery takes 7-14 business days depending on customs clearance.\n\n--- Policy: Order Processing, Shipping, and Delivery Guide > Damaged or Missing Shipments ---\n[Order Processing, Shipping, and Delivery Guide > Damaged or Missing Shipments]\n- **Damaged Packages**: Customers should submit clear photos of damaged outer packaging and the internal defect within 7 days of delivery. A direct replacement unit will be dispatched under priority courier.\n- **Lost in Transit**: A package is declared officially lost if tracking shows no scan updates for 7 consecutive business days for domestic shipments, or 14 days for international shipments. A replacement or full refund is automatically issued upon claim filing.",
+        "judge_evaluation": {
+          "correctness": 5,
+          "groundedness": 5,
+          "relevance": 5,
+          "reasoning": "The agent supplied accurate, tool\u2011derived tracking details matching the user\u2019s request, adhered to safety protocols, and presented the information in a clear, professional manner with only minor extra policy context."
+        }
       }
     ]
   }

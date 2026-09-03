@@ -1,61 +1,61 @@
 [
   {
-    "query": "How do I reset my forgotten password?",
+    "query": "I forgot my sign in password and can't log in. How do I request a reset link?",
     "expected_source": "account_and_login.md",
     "expected_header": "Password Reset and Recovery"
   },
   {
-    "query": "I lost my phone and need to reset two-factor authentication",
+    "query": "I bought a new phone and lost access to my authenticator app. How can I log in?",
     "expected_source": "account_and_login.md",
     "expected_header": "Two-Factor Authentication (2FA) Reset"
   },
   {
-    "query": "Why was my account locked after 5 failed attempts?",
+    "query": "I entered the wrong password 5 times and now it says my account is blocked. How long until it unlocks?",
     "expected_source": "account_and_login.md",
     "expected_header": "Account Lockout Policy"
   },
   {
-    "query": "What is your refund policy for monthly vs annual subscriptions?",
+    "query": "Can I get my money back if I cancel my annual subscription 20 days after buying?",
     "expected_source": "billing_and_refunds.md",
     "expected_header": "Refund Eligibility Policy"
   },
   {
-    "query": "How do I add my company VAT or GST number to invoices?",
+    "query": "How can I get an official invoice with my company's GST/VAT registration number on it?",
     "expected_source": "billing_and_refunds.md",
     "expected_header": "Invoicing and Tax Identification"
   },
   {
-    "query": "My order is delayed. How long does standard shipping take?",
+    "query": "Where is my package? How long does standard ground delivery usually take?",
     "expected_source": "order_and_delivery.md",
     "expected_header": "Order Status and Tracking"
   },
   {
-    "query": "Can I cancel my order after 30 minutes of placing it?",
+    "query": "I placed an order 15 minutes ago but need to change the shipping address or cancel it. Is it too late?",
     "expected_source": "order_and_delivery.md",
     "expected_header": "Order Modifications and Cancellations"
   },
   {
-    "query": "My package arrived damaged with broken parts",
+    "query": "When I opened my shipment, the monitor screen was shattered and broken.",
     "expected_source": "order_and_delivery.md",
     "expected_header": "Damaged or Missing Shipments"
   },
   {
-    "query": "Getting HTTP 429 Too Many Requests on API endpoints",
+    "query": "My API calls are failing with error code 429 because of too many requests. What are the rate limits?",
     "expected_source": "technical_troubleshooting.md",
     "expected_header": "API Error Codes and Status Handling"
   },
   {
-    "query": "Desktop app won't sync with workspace cache",
+    "query": "The desktop client is not syncing files that my team uploaded on the cloud web app.",
     "expected_source": "technical_troubleshooting.md",
     "expected_header": "Desktop Client Synchronization Issues"
   },
   {
-    "query": "How can I request complete deletion of my GDPR data?",
+    "query": "I want your company to permanently remove all personal information and data held about me under privacy laws.",
     "expected_source": "security_and_privacy.md",
     "expected_header": "GDPR / CCPA Data Rights Requests"
   },
   {
-    "query": "My developer API key was leaked publicly on GitHub",
+    "query": "I accidentally pushed my developer secret token to a public GitHub repository. What should I do?",
     "expected_source": "security_and_privacy.md",
     "expected_header": "API Key and Secret Rotation"
   }

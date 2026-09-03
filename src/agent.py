@@ -31,12 +31,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 def check_order_status(order_id: str) -> Dict[str, Any]:
     """Mock CRM function to check order delivery status."""
     clean_id = order_id.upper().strip()
+    suffix = clean_id.split("-")[-1] if "-" in clean_id else clean_id[-4:]
     if "123" in clean_id or "ORD" in clean_id:
         return {
             "order_id": clean_id,
             "status": "In Transit",
             "carrier": "FedEx",
-            "tracking_number": "TRK987654321",
+            "tracking_number": f"TRK-{suffix}",
             "estimated_delivery": "2 business days",
             "can_self_cancel": False,
             "items": ["Pro Ergonomic Chair - Black"]
@@ -147,13 +148,18 @@ class SupportTicketAgent:
             
         doc_context = "\n\n".join([f"--- Doc: {d['metadata'].get('header', '')} ---\n{d['content']}" for d in retrieved])
         
-        # Formulate answer using retrieved context
-        answer = (
-            f"Hello! Thank you for reaching out to support.\n\n"
-            f"Based on our knowledge base:\n"
-            f"{doc_context[:400]}...\n\n"
-            f"If you need any further assistance with this issue, please let us know!"
-        )
+        if doc_context:
+            answer = (
+                f"Hello! Thank you for reaching out to support.\n\n"
+                f"Based on our knowledge base:\n"
+                f"{doc_context}\n\n"
+                f"If you need any further assistance with this issue, please let us know!"
+            )
+        else:
+            answer = (
+                f"Hello! Thank you for reaching out to support.\n\n"
+                f"We have received your query and a support agent will assist you shortly."
+            )
         
         return {
             **state,
@@ -170,42 +176,66 @@ class SupportTicketAgent:
         action = state["extraction"].requested_action
         message = state["raw_message"]
         
-        # Extract potential order ID from message or mock default
-        order_id = "ORD-8821-4902"
+        # 1. Dynamically extract order ID from message (must contain digits, e.g. ORD-1234 or ORD1234)
+        import re
+        order_match = re.search(r"\bORD-?\d+(?:-\d+)?\b", message, re.IGNORECASE)
+        order_id = order_match.group(0).upper() if order_match else None
+
+        # Dynamically extract days since purchase if mentioned (e.g. "after 20 days")
+        days_match = re.search(r"(\d+)\s*days?", message, re.IGNORECASE)
+        days_since_purchase = int(days_match.group(1)) if days_match else 10
         
-        # Consequential action check: Refund or Cancel Order
-        if action in [RequestedAction.REFUND, RequestedAction.CANCEL_ORDER] or category in [IssueCategory.REFUND_REQUEST, IssueCategory.ORDER_CANCELLATION]:
-            refund_check = check_refund_eligibility(order_id)
-            order_info = check_order_status(order_id)
+        # 2. Retrieve relevant policy context via RAG
+        retrieved = []
+        if self.rag:
+            retrieved = self.rag.retrieve_and_rerank(message, top_k=2)
             
-            # Requires human interrupt / explicit confirmation before financial action
+        policy_context = "\n\n".join([f"--- Policy: {d['metadata'].get('header', '')} ---\n{d['content']}" for d in retrieved])
+        
+        # 3. Consequential action check: Refund or Cancel Order
+        if action in [RequestedAction.REFUND, RequestedAction.CANCEL_ORDER] or category in [IssueCategory.REFUND_REQUEST, IssueCategory.ORDER_CANCELLATION]:
+            target_order = order_id or "ORD-8821-4902"
+            refund_check = check_refund_eligibility(target_order, days_since_purchase=days_since_purchase)
+            order_info = check_order_status(target_order)
+            
+            policy_intro = f"\n\nPolicy Guidelines:\n{policy_context}\n\n" if policy_context else "\n\n"
+            
+            response_text = (
+                f"Your request regarding refund / cancellation has been received.{policy_intro}"
+                f"Order Reference: {target_order} (Status: {order_info['status']}). "
+                f"Eligibility assessment: {refund_check['reason']}. "
+                f"Because this involves a financial transaction ({action.value}), our support team "
+                f"is confirming final manager authorization to process this securely."
+            )
+            
             return {
                 **state,
+                "retrieved_docs": retrieved,
                 "requires_human_approval": True,
                 "escalation_reason": f"Customer requested consequential action: '{action.value}'. Order status: {order_info['status']}. Refund eligibility: {refund_check['reason']}",
-                "agent_response": (
-                    f"Your request regarding order {order_id} has been reviewed. "
-                    f"Because this involves a financial action ({action.value}), our support specialist "
-                    f"is confirming the final authorization to process this securely."
-                ),
-                "tools_called": ["billing_specialist", "check_refund_eligibility", "check_order_status"],
+                "agent_response": response_text,
+                "tools_called": ["billing_specialist", "knowledge_base_retrieval", "check_refund_eligibility", "check_order_status"],
                 "step_count": state.get("step_count", 0) + 1,
                 "is_completed": False
             }
         
-        # Standard order / delivery inquiry
-        order_info = check_order_status(order_id)
+        # 4. Standard order / delivery inquiry
+        target_order = order_id or "ORD-8821-4902"
+        order_info = check_order_status(target_order)
         answer = (
-            f"Thank you for contacting us regarding your order {order_id}.\n"
+            f"Thank you for contacting us regarding your order {target_order}.\n"
             f"Current Status: {order_info['status']}\n"
             f"Carrier: {order_info['carrier']} (Tracking: {order_info['tracking_number'] or 'Pending'})\n"
             f"Estimated Delivery: {order_info['estimated_delivery']}"
         )
+        if policy_context:
+            answer += f"\n\nRelevant Information:\n{policy_context}"
         
         return {
             **state,
+            "retrieved_docs": retrieved,
             "agent_response": answer,
-            "tools_called": ["billing_specialist", "check_order_status"],
+            "tools_called": ["billing_specialist", "knowledge_base_retrieval", "check_order_status"],
             "step_count": state.get("step_count", 0) + 1,
             "is_completed": True
         }
