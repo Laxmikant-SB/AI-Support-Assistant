@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "description": "Baseline evaluation for AI Support Ticket Assistant",
+  "extraction_metrics": {
+    "total_eval_samples": 50,
+    "invalid_json_rate": 0.0,
+    "invalid_enum_rate": 0.0,
+    "exact_match_accuracy": {
+      "issue_category": 0.58,
+      "priority": 0.48,
+      "customer_sentiment": 0.88,
+      "requested_action": 0.74,
+      "product_or_service": 0.66
+    }
+  },
+  "retrieval_metrics": {
+    "total_queries": 12,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "mrr": 1.0
+  },
+  "agent_llm_judge_metrics": {
+    "avg_correctness_score_1_to_5": 2.0,
+    "avg_groundedness_score_1_to_5": 1.67,
+    "avg_relevance_score_1_to_5": 2.33,
+    "sample_evaluations": [
+      {
+        "correctness": 2,
+        "groundedness": 1,
+        "relevance": 2,
+        "reasoning": "The reply mentions a refund request and an order number, but it does not explain how to obtain a refund after 20 days, provides no policy or steps, lacks grounding in the query context, and offers little actionable information."
+      },
+      {
+        "correctness": 3,
+        "groundedness": 3,
+        "relevance": 3,
+        "reasoning": "The answer references the correct password\u2011reset guide but is truncated, missing steps 2\u20114 and details like checking spam; it is grounded in the source but incomplete, lowering correctness and relevance."
+      },
+      {
+        "correctness": 1,
+        "groundedness": 1,
+        "relevance": 2,
+        "reasoning": "The answer provides tracking details for the wrong order (ORD-8821-4902) instead of the requested ORD-1234, making it incorrect and ungrounded, though it attempts to address tracking, so relevance is low."
+      }
+    ]
+  }
+}

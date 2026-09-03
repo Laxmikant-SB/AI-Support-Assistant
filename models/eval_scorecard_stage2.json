@@ -1,0 +1,12 @@
+{
+  "total_eval_samples": 50,
+  "invalid_json_rate": 0.0,
+  "invalid_enum_rate": 0.0,
+  "exact_match_accuracy": {
+    "issue_category": 0.58,
+    "priority": 0.48,
+    "customer_sentiment": 0.88,
+    "requested_action": 0.74,
+    "product_or_service": 0.66
+  }
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "query": "How do I reset my forgotten password?",
+    "expected_source": "account_and_login.md",
+    "expected_header": "Password Reset and Recovery"
+  },
+  {
+    "query": "I lost my phone and need to reset two-factor authentication",
+    "expected_source": "account_and_login.md",
+    "expected_header": "Two-Factor Authentication (2FA) Reset"
+  },
+  {
+    "query": "Why was my account locked after 5 failed attempts?",
+    "expected_source": "account_and_login.md",
+    "expected_header": "Account Lockout Policy"
+  },
+  {
+    "query": "What is your refund policy for monthly vs annual subscriptions?",
+    "expected_source": "billing_and_refunds.md",
+    "expected_header": "Refund Eligibility Policy"
+  },
+  {
+    "query": "How do I add my company VAT or GST number to invoices?",
+    "expected_source": "billing_and_refunds.md",
+    "expected_header": "Invoicing and Tax Identification"
+  },
+  {
+    "query": "My order is delayed. How long does standard shipping take?",
+    "expected_source": "order_and_delivery.md",
+    "expected_header": "Order Status and Tracking"
+  },
+  {
+    "query": "Can I cancel my order after 30 minutes of placing it?",
+    "expected_source": "order_and_delivery.md",
+    "expected_header": "Order Modifications and Cancellations"
+  },
+  {
+    "query": "My package arrived damaged with broken parts",
+    "expected_source": "order_and_delivery.md",
+    "expected_header": "Damaged or Missing Shipments"
+  },
+  {
+    "query": "Getting HTTP 429 Too Many Requests on API endpoints",
+    "expected_source": "technical_troubleshooting.md",
+    "expected_header": "API Error Codes and Status Handling"
+  },
+  {
+    "query": "Desktop app won't sync with workspace cache",
+    "expected_source": "technical_troubleshooting.md",
+    "expected_header": "Desktop Client Synchronization Issues"
+  },
+  {
+    "query": "How can I request complete deletion of my GDPR data?",
+    "expected_source": "security_and_privacy.md",
+    "expected_header": "GDPR / CCPA Data Rights Requests"
+  },
+  {
+    "query": "My developer API key was leaked publicly on GitHub",
+    "expected_source": "security_and_privacy.md",
+    "expected_header": "API Key and Secret Rotation"
+  }
+]
