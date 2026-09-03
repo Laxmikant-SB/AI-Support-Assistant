@@ -1,0 +1,14 @@
+# Additional Local Fine-Tuning & Local GPU Inference Dependencies
+# Install when running local GPU fine-tuning (USE_LOCAL_MODEL=true)
+
+-r requirements.txt
+
+# Local QLoRA Fine-Tuning & Local Model Loading
+torch>=2.2.0
+transformers>=4.41.0
+accelerate>=0.30.0
+peft>=0.11.0
+bitsandbytes>=0.43.0
+trl>=0.8.6
+datasets>=2.19.0
+huggingface-hub>=0.23.0

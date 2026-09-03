@@ -56,15 +56,14 @@ def startup_event():
     except Exception as e:
         print(f"Warning: Agent init: {e}")
 
-    # Use Groq teacher model by default for reliable extraction.
-    # Set USE_LOCAL_MODEL=1 in .env to use the fine-tuned LoRA adapter instead.
-    use_local = os.environ.get("USE_LOCAL_MODEL", "0") == "1"
+    # Respect USE_LOCAL_MODEL environment variable (default "false" for cloud deployment)
+    use_local = os.environ.get("USE_LOCAL_MODEL", "false").lower() in ("true", "1", "t", "yes")
     try:
         extractor = TicketExtractor(
             adapter_path=str(adapter_path) if (use_local and adapter_path.exists()) else None,
             use_teacher_fallback=not use_local
         )
-        mode = "LoRA adapter" if use_local else "Groq teacher model (openai/gpt-oss-120b)"
+        mode = "Local QLoRA adapter" if use_local else "Groq API (Lightweight Cloud Mode)"
         print(f"Extractor initialized: {mode}")
     except Exception as e:
         print(f"Warning: Extractor init: {e}")

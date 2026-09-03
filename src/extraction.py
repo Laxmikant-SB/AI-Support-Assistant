@@ -1,7 +1,8 @@
 """
-Extraction module: Loads fine-tuned Qwen2.5-1.5B-Instruct LoRA model
-and performs structured customer support ticket extraction.
-Includes fallback support for teacher model / local inference.
+Extraction module: Performs structured customer support ticket extraction.
+Supports:
+1. Groq API inference (llama-3.3-70b-versatile / openai/gpt-oss-120b) for lightweight deployment (USE_LOCAL_MODEL=false).
+2. Local Qwen2.5-1.5B + LoRA adapter inference on local GPU (USE_LOCAL_MODEL=true).
 """
 
 import json
@@ -9,7 +10,6 @@ import os
 import re
 from pathlib import Path
 from typing import Optional, Tuple
-import torch
 
 from src.schema import (
     IssueCategory,
@@ -31,7 +31,7 @@ Output ONLY raw JSON with these 5 keys. No extra commentary."""
 
 
 def build_chat_prompt(ticket_text: str) -> list:
-    """Builds standard chat messages for Qwen / chat models."""
+    """Builds standard chat messages for Qwen / Groq chat models."""
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"Customer ticket:\n{ticket_text}"}
@@ -60,7 +60,10 @@ def clean_json_response(raw_text: str) -> dict:
 
 
 class TicketExtractor:
-    """Handles inference with the fine-tuned LoRA model or fallback teacher model."""
+    """
+    Handles ticket metadata extraction.
+    Loads local QLoRA model ONLY if USE_LOCAL_MODEL=true; otherwise uses Groq API.
+    """
     
     def __init__(
         self,
@@ -71,18 +74,25 @@ class TicketExtractor:
     ):
         self.base_model_name = base_model_name
         self.adapter_path = adapter_path
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        self.use_teacher_fallback = use_teacher_fallback
         self.model = None
         self.tokenizer = None
+        self.device = device
         
-        if not use_teacher_fallback and adapter_path and Path(adapter_path).exists():
+        # Check environment flag (default: "false" for deployment compatibility)
+        use_local_env = os.environ.get("USE_LOCAL_MODEL", "false").lower() in ("true", "1", "t", "yes")
+        
+        if use_local_env and not use_teacher_fallback and adapter_path and Path(adapter_path).exists():
             self._load_local_model()
-            
+        else:
+            print("TicketExtractor: Configured for lightweight API mode (USE_LOCAL_MODEL=false).")
+
     def _load_local_model(self):
-        """Loads Qwen2.5-1.5B base model + LoRA adapter."""
+        """Lazy loads PyTorch, Transformers & LoRA adapter on demand."""
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
         from peft import PeftModel
+        
+        self.device = self.device or ("cuda" if torch.cuda.is_available() else "cpu")
         
         print(f"Loading tokenizer from {self.base_model_name}...")
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -111,21 +121,20 @@ class TicketExtractor:
         print(f"Loading LoRA adapter from {self.adapter_path}...")
         self.model = PeftModel.from_pretrained(base_model, self.adapter_path)
         self.model.eval()
-        print("Model successfully loaded!")
+        print("Local QLoRA Model successfully loaded!")
 
     def extract(self, ticket_text: str) -> Tuple[TicketExtraction, bool]:
         """
         Extracts structured fields from ticket.
         Returns (TicketExtraction, is_valid).
         """
-        # If model is loaded locally, run local inference
         if self.model is not None and self.tokenizer is not None:
             return self._extract_local(ticket_text)
         
-        # Fallback to teacher model via Groq
         return self._extract_groq(ticket_text)
 
     def _extract_local(self, ticket_text: str) -> Tuple[TicketExtraction, bool]:
+        import torch
         messages = build_chat_prompt(ticket_text)
         prompt = self.tokenizer.apply_chat_template(
             messages,
@@ -151,37 +160,41 @@ class TicketExtractor:
             validated = TicketExtraction(**parsed)
             return validated, True
         except Exception:
-            # Return safe fallback if parsing fails
-            return TicketExtraction(
-                issue_category=IssueCategory.OTHER,
-                priority=Priority.MEDIUM,
-                customer_sentiment=CustomerSentiment.NEUTRAL,
-                requested_action=RequestedAction.OTHER,
-                product_or_service="General"
-            ), False
+            return safe_default_extraction(), False
 
     def _extract_groq(self, ticket_text: str) -> Tuple[TicketExtraction, bool]:
         from groq import Groq
         api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY is not set.")
+            print("Warning: GROQ_API_KEY is not set. Returning safe default extraction.")
+            return safe_default_extraction(), False
+            
         client = Groq(api_key=api_key)
+        models_to_try = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
         
-        try:
-            response = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
-                messages=build_chat_prompt(ticket_text),
-                temperature=0.0,
-                response_format={"type": "json_object"}
-            )
-            raw = response.choices[0].message.content.strip()
-            parsed = json.loads(raw)
-            return TicketExtraction(**parsed), True
-        except Exception:
-            return TicketExtraction(
-                issue_category=IssueCategory.OTHER,
-                priority=Priority.MEDIUM,
-                customer_sentiment=CustomerSentiment.NEUTRAL,
-                requested_action=RequestedAction.OTHER,
-                product_or_service="General"
-            ), False
+        for model in models_to_try:
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=build_chat_prompt(ticket_text),
+                    temperature=0.0,
+                    response_format={"type": "json_object"}
+                )
+                raw = response.choices[0].message.content.strip()
+                parsed = json.loads(raw)
+                return TicketExtraction(**parsed), True
+            except Exception as e:
+                continue
+
+        return safe_default_extraction(), False
+
+
+def safe_default_extraction() -> TicketExtraction:
+    """Fallback default if extraction fails."""
+    return TicketExtraction(
+        issue_category=IssueCategory.OTHER,
+        priority=Priority.MEDIUM,
+        customer_sentiment=CustomerSentiment.NEUTRAL,
+        requested_action=RequestedAction.OTHER,
+        product_or_service="General"
+    )
