@@ -16,8 +16,69 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Configurable backend endpoint
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+# Configurable backend endpoint (if not set or unreachable, runs in-process)
+BACKEND_URL = os.environ.get("BACKEND_URL", "").rstrip("/")
+
+@st.cache_resource
+def get_pipeline():
+    """Lazily initializes the RAG and agent pipeline directly in Streamlit."""
+    from pathlib import Path
+    from src.retrieval import HybridRAGPipeline
+    from src.agent import SupportTicketAgent
+    from src.extraction import TicketExtractor
+    
+    docs_dir = Path(__file__).resolve().parent / "docs_kb"
+    rag = HybridRAGPipeline(docs_dir=docs_dir)
+    agent = SupportTicketAgent(rag_pipeline=rag)
+    extractor = TicketExtractor(use_teacher_fallback=True)
+    return rag, agent, extractor
+
+def process_ticket_locally(ticket_text: str, ticket_id: str = "TKT-DEMO-01"):
+    """Processes ticket directly in Python without needing a separate backend server."""
+    import time
+    from src.guardrails import redact_pii, check_prompt_injection_fast, check_prompt_injection_llm
+    
+    rag, agent, extractor = get_pipeline()
+    start_time = time.time()
+    
+    # 1. PII Redaction
+    sanitized_msg = redact_pii(ticket_text)
+    
+    # 2. Guardrail validation
+    is_injection = check_prompt_injection_fast(sanitized_msg)
+    if is_injection:
+        is_injection = check_prompt_injection_llm(sanitized_msg)
+        
+    if is_injection:
+        return {
+            "ticket_id": ticket_id,
+            "sanitized_message": sanitized_msg,
+            "extraction": {"issue_category": "Other", "priority": "High", "customer_sentiment": "Negative", "requested_action": "Other", "product_or_service": "General"},
+            "is_safe": False,
+            "requires_human_approval": True,
+            "escalation_reason": "Security Guardrail Triggered: Potential prompt injection detected",
+            "tools_called": ["guardrail_security_firewall"],
+            "agent_response": "Your message could not be processed due to a security violation.",
+            "processing_time_ms": round((time.time() - start_time) * 1000, 1)
+        }
+        
+    # 3. Extract structured fields via Groq
+    extraction, _ = extractor.extract(sanitized_msg)
+    
+    # 4. Process with LangGraph Agent
+    state = agent.process_ticket(sanitized_msg, extraction, ticket_id)
+    
+    return {
+        "ticket_id": ticket_id,
+        "sanitized_message": sanitized_msg,
+        "extraction": extraction.model_dump(),
+        "is_safe": True,
+        "requires_human_approval": state.get("requires_human_approval", False),
+        "escalation_reason": state.get("escalation_reason"),
+        "tools_called": state.get("tools_called", []),
+        "agent_response": state.get("agent_response", ""),
+        "processing_time_ms": round((time.time() - start_time) * 1000, 1)
+    }
 
 # ==========================================
 # 1. Header & About Section
@@ -79,20 +140,23 @@ if submit_clicked or "last_result" in st.session_state:
             st.stop()
 
         with st.spinner("Processing ticket through extraction, RAG, guardrails, and agent router..."):
-            try:
-                response = requests.post(
-                    f"{BACKEND_URL}/api/ticket/process",
-                    json={"message": ticket_input, "ticket_id": "TKT-DEMO-01"},
-                    timeout=30
-                )
-                if response.status_code == 200:
-                    st.session_state["last_result"] = response.json()
-                else:
-                    st.error(f"Backend API Error ({response.status_code}): {response.text}")
-                    st.stop()
-            except requests.exceptions.RequestException as e:
-                st.error(f"Failed to connect to backend at `{BACKEND_URL}`. Ensure FastAPI server is running (`python -m uvicorn api.main:app`). Details: {e}")
-                st.stop()
+            if BACKEND_URL:
+                try:
+                    response = requests.post(
+                        f"{BACKEND_URL}/api/ticket/process",
+                        json={"message": ticket_input, "ticket_id": "TKT-DEMO-01"},
+                        timeout=30
+                    )
+                    if response.status_code == 200:
+                        st.session_state["last_result"] = response.json()
+                    else:
+                        st.error(f"Backend API Error ({response.status_code}): {response.text}")
+                        st.stop()
+                except requests.exceptions.RequestException as e:
+                    st.warning(f"Backend unreachable at `{BACKEND_URL}`. Running in-process instead...")
+                    st.session_state["last_result"] = process_ticket_locally(ticket_input)
+            else:
+                st.session_state["last_result"] = process_ticket_locally(ticket_input)
 
     data = st.session_state.get("last_result")
     if not data:
@@ -134,26 +198,32 @@ if submit_clicked or "last_result" in st.session_state:
         approve_col1, approve_col2 = st.columns([1, 4])
         if approve_col1.button("✅ Approve Refund / Action", type="secondary"):
             with st.spinner("Executing financial transaction..."):
-                try:
-                    app_res = requests.post(
-                        f"{BACKEND_URL}/api/ticket/approve",
-                        json={
-                            "ticket_id": data.get("ticket_id", "TKT-DEMO-01"),
-                            "action": "REFUND",
-                            "order_id": "ORD-8821-4902",
-                            "approved": True,
-                            "manager_notes": "Approved via Streamlit Manager Portal"
-                        },
-                        timeout=15
-                    )
-                    if app_res.status_code == 200:
-                        res_data = app_res.json()
-                        st.success(f"🎉 **Action Executed**: {res_data.get('message')}")
-                        st.json(res_data.get("action_result", {}))
-                    else:
-                        st.error(f"Approval error: {app_res.text}")
-                except Exception as ex:
-                    st.error(f"Failed to submit approval: {ex}")
+                if BACKEND_URL:
+                    try:
+                        app_res = requests.post(
+                            f"{BACKEND_URL}/api/ticket/approve",
+                            json={
+                                "ticket_id": data.get("ticket_id", "TKT-DEMO-01"),
+                                "action": "REFUND",
+                                "order_id": "ORD-8821-4902",
+                                "approved": True,
+                                "manager_notes": "Approved via Streamlit Manager Portal"
+                            },
+                            timeout=15
+                        )
+                        if app_res.status_code == 200:
+                            res_data = app_res.json()
+                            st.success(f"🎉 **Action Executed**: {res_data.get('message')}")
+                            st.json(res_data.get("action_result", {}))
+                        else:
+                            st.error(f"Approval error: {app_res.text}")
+                    except Exception as ex:
+                        st.error(f"Failed to submit approval: {ex}")
+                else:
+                    from src.agent import execute_order_cancellation
+                    res = execute_order_cancellation("ORD-8821-4902")
+                    st.success("🎉 **Action Executed**: Action 'REFUND' successfully executed for order ORD-8821-4902.")
+                    st.json(res)
 
     # Section 3: Retrieved Knowledge Context (RAG)
     st.markdown("### 📚 Retrieved Context (Hybrid RAG)")
