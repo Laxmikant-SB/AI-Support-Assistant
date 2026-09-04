@@ -8,6 +8,22 @@ import os
 import requests
 import streamlit as st
 
+# 1. Load local .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# 2. Sync Streamlit Cloud secrets to os.environ for in-process execution
+try:
+    if hasattr(st, "secrets"):
+        for key in ["GROQ_API_KEY", "USE_LOCAL_MODEL", "BACKEND_URL"]:
+            if key in st.secrets and key not in os.environ:
+                os.environ[key] = str(st.secrets[key])
+except Exception:
+    pass
+
 # Configure page metadata & layout
 st.set_page_config(
     page_title="AI Support Ticket Assistant",
